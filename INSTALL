@@ -1,0 +1,8 @@
+DEPENDANCIES 
+
+pip install psutils
+apt-get install cython
+apt-get install liblo-dev
+pip install pyliblo
+apt-get install libasound-dev
+pip install pyalsaaudio
