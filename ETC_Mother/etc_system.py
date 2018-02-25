@@ -13,7 +13,7 @@ import csv
 class System:
 
     GRABS_PATH = "/home/pi/ectera/usbdrive/Grabs/"
-    MODES_PATH = "/home/pi/ectera/usbdrive/ETC_Modes/"
+    MODES_PATH = "/home/pi/ectera/usbdrive/Modes/"
     SCENES_PATH = "/home/pi/ectera/usbdrive/Scenes.csv"
 
     RES =  (1280,720)
