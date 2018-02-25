@@ -1,9 +1,16 @@
+/*
+ * OSC_Keyboard
+ * gets inputs from knobs and buttons and sends them via osc over usb serial
+ * also controls oled screen and midi inputs
+ * 
+ */
+ 
+#include <Adafruit_SSD1306_Teensy.h>
+#include <Bounce2.h>
+#include <Adafruit_GFX.h>
 #include <OSCMessage.h>
 
-/*
-Make an OSC message and send it over serial
- */
-
+//Setup serial over usb or not
 #ifdef BOARD_HAS_USB_SERIAL
 #include <SLIPEncodedUSBSerial.h>
 SLIPEncodedUSBSerial SLIPSerial( thisBoardsSerialUSB );
@@ -12,40 +19,83 @@ SLIPEncodedUSBSerial SLIPSerial( thisBoardsSerialUSB );
  SLIPEncodedSerial SLIPSerial(Serial1);
 #endif
 
+// OLED display TWI address
+#define OLED_ADDR   0x3C
+
+// reset pin not used on 4-pin OLED module
+Adafruit_SSD1306 display(-1);  // -1 = no reset pin
+
 int pinLast[12] = {0};
 int analogLast[5] = {0};
 int pinCurrent;
 int analogCurrent;
 
+#define KNOB1 4
+#define KNOB2 3
+#define KNOB3 2
+#define KNOB4 1
+#define KNOB5 5
+#define BGCOLOR 0
+
+#define NUM_KNOBS 6
+const uint8_t KNOB_PINS[NUM_KNOBS] = {KNOB2, KNOB3, BGCOLOR, KNOB1, KNOB4, KNOB5};
+
+#define NEXT_MODE 5
+#define PREV_MODE 3
+#define TRIG_BUTTON 11
+#define PREV_SCENE 8
+#define NEXT_SCENE 6
+#define SAVE_DELETE_SCENE 7
+#define SET_OSD 2
+#define AUTO_CLEAR 1
+#define SCREEN_GRAB 9
+#define EXTRA1 4
+#define EXTRA2 10
+#define POWER 0
+
+#define NUM_BUTTONS 12
+const uint8_t BUTTON_PINS[NUM_BUTTONS] = {POWER, PREV_MODE, NEXT_MODE, SET_OSD, PREV_SCENE, NEXT_SCENE, SAVE_DELETE_SCENE, SCREEN_GRAB, AUTO_CLEAR, TRIG_BUTTON, EXTRA1, EXTRA2};
+
+//setup debounce for button inputs
+Bounce * buttons = new Bounce[NUM_BUTTONS];
+
 void setup() {
   //begin SLIPSerial just like Serial
-  SLIPSerial.begin(9600);   // set this as high as you can reliably run on your platform
-#if ARDUINO >= 100
-  while(!Serial)
-    ; //Leonardo "feature"
-#endif
-pinMode(0, INPUT);
-pinMode(1, INPUT);
-pinMode(2, INPUT);
-pinMode(3, INPUT);
-pinMode(4, INPUT);
-pinMode(5, INPUT);
-pinMode(6, INPUT);
-pinMode(7, INPUT);
-pinMode(8, INPUT);
-pinMode(9, INPUT);
-pinMode(10, INPUT);
-pinMode(11, INPUT);
+  SLIPSerial.begin(112000);   // set this as high as you can reliably run on your platform
+  #if ARDUINO >= 100
+    while(!Serial)
+      ; //Leonardo "feature"
+  #endif
 
+  for (int i = 0; i < NUM_BUTTONS; i++) {
+    buttons[i].attach( BUTTON_PINS[i] , INPUT );       //setup the bounce instance for the current button
+    buttons[i].interval(25);              // interval in ms
+  }
+
+  //init the display and show the default boot screen
+  display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR);
+  
+  display.clearDisplay();
+  display.display();  // display a line of text
+  display.setTextSize(3);
+  display.setTextColor(WHITE);
+  display.setCursor(10,20);
+  display.print("ectera");
+
+  // update display with all of the above graphics
+  display.display();
+  delay(2000);
+  
 }
 
 void loop(){
   int analogUpdate = 0;
   int i;
-  
+
+  //send any knob updates over osc
   OSCMessage msg("/knobs");
-  for (i=0; i<6; i++ ) { 
-    analogCurrent = analogRead(i);
+  for (i=0; i<NUM_KNOBS; i++ ) { 
+    analogCurrent = analogRead(KNOB_PINS[i]);
     //if (analogCurrent > 100) { analogCurrent = 100; }
 
     if (abs(analogLast[i] - analogCurrent) > 15) {
@@ -68,10 +118,13 @@ void loop(){
   }
 
     
-  //the message wants an OSC address as first argument
-  for (i=0; i<12; i++ ) { 
+  //send any button presses over osc
+  for (i=0; i<NUM_BUTTONS; i++)  {
+    
+    // Update the Bounce instance :
+    buttons[i].update();
 
-    if (digitalRead(i) == HIGH) { 
+    if (buttons[i].read() == HIGH) { 
       pinCurrent = 1;
     } else {
       pinCurrent = 0;
@@ -96,7 +149,52 @@ void loop(){
     pinLast[i] = pinCurrent;
     
   }
-  //for (i = 0; i < 12; i++) {
-  //  Serial.println(pinLast[i]);
-  //}
+
+  //draw the display with the last status
+  updateDisplay();
+
+}
+
+void updateDisplay(void) {
+  display.clearDisplay();
+
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(1,1);
+  display.print("ectera..");
+  display.setCursor(100,1);
+  display.setTextSize(2);
+  display.print(":)");
+
+  //draw the circles and fill them if the button is pressed
+  if (pinLast[3]==1) { display.fillCircle(17, 25, 5, WHITE); } else { display.drawCircle(17, 25, 5, WHITE); }
+  if (pinLast[8]==1) { display.fillCircle(103, 25, 5, WHITE); } else { display.drawCircle(103, 25, 5, WHITE); }
+  
+  if (pinLast[1]==1) { display.fillCircle(10, 40, 5, WHITE); } else { display.drawCircle(10, 40, 5, WHITE); }
+  if (pinLast[10]==1) { display.fillCircle(20, 50, 5, WHITE); } else { display.drawCircle(20, 50, 5, WHITE); }
+  if (pinLast[2]==1) { display.fillCircle(30, 40, 5, WHITE); } else { display.drawCircle(30, 40, 5, WHITE); }
+  
+  if (pinLast[4]==1) { display.fillCircle(50, 40, 5, WHITE); } else { display.drawCircle(50, 40, 5, WHITE); }
+  if (pinLast[6]==1) { display.fillCircle(60, 50, 5, WHITE); } else { display.drawCircle(60, 50, 5, WHITE); }
+  if (pinLast[5]==1) { display.fillCircle(70, 40, 5, WHITE); } else { display.drawCircle(70, 40, 5, WHITE); }
+  
+  if (pinLast[7]==1) { display.fillCircle(90, 40, 5, WHITE); } else { display.drawCircle(90, 40, 5, WHITE); }
+  if (pinLast[11]==1) { display.fillCircle(100, 50, 5, WHITE); } else { display.drawCircle(100, 50, 5, WHITE); }
+  if (pinLast[9]==1) { display.fillCircle(110, 40, 5, WHITE); } else { display.drawCircle(110, 40, 5, WHITE); }
+
+  display.drawRect(28,19,10,12, WHITE);
+  display.drawRect(39,19,10,12, WHITE);
+  display.drawRect(50,19,10,12, WHITE);
+  display.drawRect(61,19,10,12, WHITE);
+  display.drawRect(72,19,10,12, WHITE);
+  display.drawRect(83,19,10,12, WHITE);
+
+  display.fillRect(28,20,10,(10-round(analogLast[5]/100)), WHITE);
+  display.fillRect(39,20,10,(10-round(analogLast[3]/100)), WHITE);
+  display.fillRect(50,20,10,(10-round(analogLast[0]/100)), WHITE);
+  display.fillRect(61,20,10,(10-round(analogLast[1]/100)), WHITE);
+  display.fillRect(72,20,10,(10-round(analogLast[4]/100)), WHITE);
+  display.fillRect(83,20,10,(10-round(analogLast[2]/100)), WHITE);
+  
+  display.display();
 }
