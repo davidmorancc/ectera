@@ -189,10 +189,10 @@ def render_overlay(screen) :
    # screen.blit(text, text_rect)
     
     # version
-    mode_str = " v1.0 "
+    mode_str = " v1.0 ectera"
     text = font.render(mode_str, True, etc.WHITE, etc.BLACK)
     text_rect = text.get_rect()
-    text_rect.x = 1180
+    text_rect.x = 1080
     text_rect.centery = 680
     screen.blit(text, text_rect)
     
